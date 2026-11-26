@@ -316,6 +316,53 @@ document.addEventListener("click", async event => {
   await loadProducts();
 });
 
+
+async function handlePasswordRecovery() {
+  const { data } = await db.auth.getSession();
+
+  if (window.location.hash.includes("type=recovery") ||
+      window.location.hash.includes("access_token=")) {
+
+    document.getElementById("wowModal").style.display = "flex";
+
+    const panel = document.getElementById("wowPanel");
+
+    panel.innerHTML = `
+      <h2>Set new password</h2>
+      <form id="wowNewPasswordForm">
+        <input
+          id="wowNewPassword"
+          type="password"
+          placeholder="New password"
+          minlength="6"
+          required
+        >
+        <button class="wowMainButton">SAVE NEW PASSWORD</button>
+      </form>
+      <p id="wowMessage"></p>
+    `;
+
+    document.getElementById("wowNewPasswordForm").onsubmit =
+      async event => {
+        event.preventDefault();
+
+        const password =
+          document.getElementById("wowNewPassword").value;
+
+        const { error } = await db.auth.updateUser({
+          password: password
+        });
+
+        document.getElementById("wowMessage").textContent =
+          error ? error.message : "Password changed successfully!";
+
+        if (!error) {
+          window.location.hash = "";
+        }
+      };
+  }
+}
+
 async function start() {
   addStyles();
   createAdminInterface();
@@ -325,7 +372,7 @@ async function start() {
 
   script.onload = async () => {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+await handlePasswordRecovery();
     const { data } = await db.auth.getSession();
     currentUser = data.session?.user || null;
 
