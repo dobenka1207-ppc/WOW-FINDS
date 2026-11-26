@@ -1,148 +1,352 @@
-const defaultProducts = [
-	{
-		name: "Smart Watch",
-		image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600",
-		link: "https://amazon.com"
-	},
-	{
-		name: "Modern Lamp",
-		image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=600",
-		link: "https://amazon.com"
-	}
-];
 
-let products = JSON.parse(localStorage.getItem("wowProducts")) || defaultProducts;
+const SUPABASE_URL = "https://hampvnfbxsekknkeibna.supabase.co";
+const SUPABASE_KEY = "sb_publishable_KCEnHLwdwj_f-E2iUCsbTA_Mi_t7Z4k";
 
-function saveProducts() {
-	localStorage.setItem("wowProducts", JSON.stringify(products));
+let db;
+let currentUser = null;
+let isAdmin = false;
+
+const safe = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;",
+  '"': "&quot;", "'": "&#39;"
+}[c]));
+
+function addStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    #wowAdminButton {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      z-index: 999;
+      background: #ff7900;
+      color: #101010;
+      border: 0;
+      padding: 13px 22px;
+      border-radius: 7px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    #wowModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: #000d;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    #wowPanel {
+      background: #202020;
+      color: white;
+      padding: 25px;
+      border: 1px solid #ff7900;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+
+    #wowPanel input {
+      width: 100%;
+      padding: 13px;
+      margin: 8px 0;
+      box-sizing: border-box;
+      background: #111;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 5px;
+    }
+
+    #wowPanel button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 9px;
+      border: 0;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .wowMainButton {
+      background: #ff7900;
+      color: #111;
+    }
+
+    .wowCloseButton {
+      background: #444;
+      color: white;
+    }
+
+    .wowDeleteButton {
+      background: #dc3545;
+      color: white;
+    }
+
+    .wowError {
+      color: #ff7777;
+      margin-top: 10px;
+    }
+
+    .wowProductActions {
+      margin-top: 10px;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
-function safe(value) {
-	return String(value).replace(/[&<>"']/g, char => ({
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		'"': "&quot;",
-		"'": "&#39;"
-	}[char]));
+function createAdminInterface() {
+  const button = document.createElement("button");
+  button.id = "wowAdminButton";
+  button.textContent = "ADMIN";
+  document.body.appendChild(button);
+
+  const modal = document.createElement("div");
+  modal.id = "wowModal";
+  modal.innerHTML = `<div id="wowPanel"></div>`;
+  document.body.appendChild(modal);
+
+  button.addEventListener("click", showAdminPanel);
+
+  modal.addEventListener("click", event => {
+    if (event.target === modal) {
+      modal.style.display = "none";
+    }
+  });
 }
 
-function renderProducts() {
-	const container = document.getElementById("products");
-	if (!container) return;
+function showAdminPanel() {
+  const panel = document.getElementById("wowPanel");
 
-	container.innerHTML = products.map((p, index) => `
-		<div class="product">
-			<img src="${safe(p.image)}" alt="${safe(p.name)}">
-			<h3>${safe(p.name)}</h3>
-			<a href="${safe(p.link)}" target="_blank" rel="noopener noreferrer" class="buy-button">
-				BUY NOW ↗
-			</a>
-			<button class="delete-product" data-index="${index}">
-				DELETE
-			</button>
-		</div>
-	`).join("");
+  if (!currentUser || !isAdmin) {
+    panel.innerHTML = `
+      <h2>Admin Login</h2>
+      <form id="wowLoginForm">
+        <input id="wowEmail" type="email" placeholder="Email" required>
+        <input id="wowPassword" type="password" placeholder="Password" required>
+        <button class="wowMainButton">LOG IN</button>
+      </form>
+      <p id="wowMessage" class="wowError"></p>
+      <button class="wowCloseButton" id="wowClose">CLOSE</button>
+    `;
+  } else {
+    panel.innerHTML = `
+      <h2>WOW Finds Admin</h2>
+      <form id="wowProductForm">
+        <input id="wowName" placeholder="Product name" required>
+        <input id="wowImage" type="url" placeholder="Photo URL (https://...)" required>
+        <input id="wowLink" type="url" placeholder="Affiliate link (https://...)" required>
+        <button class="wowMainButton">ADD PRODUCT</button>
+      </form>
+      <p id="wowMessage"></p>
+      <button class="wowCloseButton" id="wowLogout">LOG OUT</button>
+      <button class="wowCloseButton" id="wowClose">CLOSE</button>
+    `;
+  }
+
+  document.getElementById("wowModal").style.display = "flex";
+
+  document.getElementById("wowClose").onclick = () => {
+    document.getElementById("wowModal").style.display = "none";
+  };
+
+  const loginForm = document.getElementById("wowLoginForm");
+
+  if (loginForm) {
+    loginForm.onsubmit = async event => {
+      event.preventDefault();
+
+      const message = document.getElementById("wowMessage");
+      message.textContent = "Logging in...";
+
+      const { data, error } = await db.auth.signInWithPassword({
+        email: document.getElementById("wowEmail").value.trim(),
+        password: document.getElementById("wowPassword").value
+      });
+
+      if (error) {
+        message.textContent = error.message;
+        return;
+      }
+
+      currentUser = data.user;
+      await checkAdmin();
+
+      if (isAdmin) {
+        showAdminPanel();
+      } else {
+        message.textContent = "This account is not an administrator.";
+        await db.auth.signOut();
+        currentUser = null;
+      }
+    };
+  }
+
+  const productForm = document.getElementById("wowProductForm");
+
+  if (productForm) {
+    productForm.onsubmit = async event => {
+      event.preventDefault();
+
+      const name = document.getElementById("wowName").value.trim();
+      const image_url = document.getElementById("wowImage").value.trim();
+      const affiliate_url = document.getElementById("wowLink").value.trim();
+      const message = document.getElementById("wowMessage");
+
+      if (!image_url.startsWith("https://") ||
+          !affiliate_url.startsWith("https://")) {
+        message.textContent = "Links must start with https://";
+        return;
+      }
+
+      message.textContent = "Saving...";
+
+      const { error } = await db.from("products").insert({
+        name,
+        image_url,
+        affiliate_url
+      });
+
+      if (error) {
+        message.textContent = error.message;
+        return;
+      }
+
+      productForm.reset();
+      message.textContent = "Product added!";
+      await loadProducts();
+    };
+  }
+
+  const logout = document.getElementById("wowLogout");
+
+  if (logout) {
+    logout.onclick = async () => {
+      await db.auth.signOut();
+      currentUser = null;
+      isAdmin = false;
+      showAdminPanel();
+      await loadProducts();
+    };
+  }
 }
 
-document.addEventListener("click", function(event) {
-	const deleteButton = event.target.closest(".delete-product");
+async function checkAdmin() {
+  isAdmin = false;
+  if (!currentUser) return;
 
-	if (deleteButton) {
-		const index = Number(deleteButton.dataset.index);
+  const { data, error } = await db
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", currentUser.id)
+    .maybeSingle();
 
-		if (confirm("Видалити цей товар?")) {
-			products.splice(index, 1);
-			saveProducts();
-			renderProducts();
-		}
-	}
+  isAdmin = !error && !!data;
+}
+
+async function loadProducts() {
+  const container = document.getElementById("products");
+  if (!container) return;
+
+  container.innerHTML = "<p>Loading products...</p>";
+
+  const { data, error } = await db
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    container.innerHTML = "<p>Could not load products.</p>";
+    console.error(error);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "<p>No products yet. Check back soon!</p>";
+    return;
+  }
+
+  container.innerHTML = data.map(product => `
+    <div class="product">
+      <img
+        src="${safe(product.image_url)}"
+        alt="${safe(product.name)}"
+        loading="lazy"
+      >
+      <h3>${safe(product.name)}</h3>
+      <a
+        href="${safe(product.affiliate_url)}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="buy-button"
+      >DISCOVER PRODUCT ↗</a>
+
+      ${isAdmin ? `
+        <div class="wowProductActions">
+          <button
+            class="wowDeleteButton"
+            data-delete="${safe(product.id)}"
+          >DELETE</button>
+        </div>
+      ` : ""}
+    </div>
+  `).join("");
+}
+
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-delete]");
+  if (!button || !isAdmin) return;
+
+  if (!confirm("Delete this product?")) return;
+
+  const { error } = await db
+    .from("products")
+    .delete()
+    .eq("id", button.dataset.delete);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  await loadProducts();
 });
 
-const style = document.createElement("style");
-style.textContent = `
-	.delete-product {
-		display: block;
-		width: 100%;
-		margin-top: 10px;
-		padding: 12px;
-		background: #dc3545;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-weight: bold;
-	}
-	.delete-product:hover {
-		background: #b02a37;
-	}
-`;
-document.head.appendChild(style);
+async function start() {
+  addStyles();
+  createAdminInterface();
 
-// Панель додавання товарів
-const adminButton = document.createElement("button");
-adminButton.textContent = "＋ Додати товар";
-adminButton.style.cssText = `
-	position:fixed;bottom:20px;right:20px;z-index:9999;
-	padding:15px 22px;background:#222;color:white;
-	border:0;border-radius:8px;cursor:pointer;font-size:16px;
-`;
-document.body.appendChild(adminButton);
+  const script = document.createElement("script");
+  script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 
-const modal = document.createElement("div");
-modal.style.cssText = `
-	display:none;position:fixed;inset:0;background:#0009;
-	z-index:10000;justify-content:center;align-items:center;padding:20px;
-`;
+  script.onload = async () => {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-modal.innerHTML = `
-	<div style="background:white;padding:25px;border-radius:12px;width:100%;max-width:400px;color:#222;">
-		<h2>Додати товар</h2>
-		<form id="productForm">
-			<input id="productName" placeholder="Назва товару" required
-				style="width:100%;padding:12px;margin:8px 0;box-sizing:border-box;">
-			<input id="productImage" placeholder="Посилання на фото (https://...)" required
-				style="width:100%;padding:12px;margin:8px 0;box-sizing:border-box;">
-			<input id="productLink" placeholder="Партнерське посилання (https://...)" required
-				style="width:100%;padding:12px;margin:8px 0;box-sizing:border-box;">
-			<button type="submit" style="padding:12px;width:100%;background:#222;color:white;border:0;cursor:pointer;">
-				ДОДАТИ
-			</button>
-			<button type="button" id="closeModal" style="padding:12px;width:100%;margin-top:8px;cursor:pointer;">
-				ЗАКРИТИ
-			</button>
-		</form>
-	</div>
-`;
+    const { data } = await db.auth.getSession();
+    currentUser = data.session?.user || null;
 
-document.body.appendChild(modal);
+    await checkAdmin();
+    await loadProducts();
 
-adminButton.addEventListener("click", () => {
-	modal.style.display = "flex";
-});
+    db.auth.onAuthStateChange(async (_event, session) => {
+      currentUser = session?.user || null;
+      await checkAdmin();
+      await loadProducts();
+    });
+  };
 
-document.getElementById("closeModal").addEventListener("click", () => {
-	modal.style.display = "none";
-});
+  script.onerror = () => {
+    const container = document.getElementById("products");
+    if (container) {
+      container.innerHTML = "<p>Could not connect to Supabase.</p>";
+    }
+  };
 
-document.getElementById("productForm").addEventListener("submit", function(event) {
-	event.preventDefault();
+  document.head.appendChild(script);
+}
 
-	const name = document.getElementById("productName").value.trim();
-	const image = document.getElementById("productImage").value.trim();
-	const link = document.getElementById("productLink").value.trim();
-
-	if (!image.startsWith("https://") || !link.startsWith("https://")) {
-		alert("Посилання повинні починатися з https://");
-		return;
-	}
-
-	products.push({ name, image, link });
-	saveProducts();
-	renderProducts();
-
-	this.reset();
-	modal.style.display = "none";
-});
-
-renderProducts();
+start();
