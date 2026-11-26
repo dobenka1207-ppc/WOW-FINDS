@@ -2,38 +2,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#101010">
-  <meta name="description" content="Discover interesting products and amazing finds.">
-  <title>WOW Finds</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WOW FINDS</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #101010;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+header {
+  padding: 25px 8%;
+  border-bottom: 1px solid #292929;
+}
+
+.logo {
+  font-size: 27px;
+  font-weight: 900;
+  color: white;
+  text-decoration: none;
+}
+
+.logo span {
+  color: #ff7900;
+}
+
+.hero {
+  text-align: center;
+  padding: 75px 20px 55px;
+}
+
+.hero p {
+  color: #aaa;
+}
+
+.hero h1 {
+  font-size: clamp(38px, 7vw, 65px);
+  margin: 15px 0;
+}
+
+.hero h1 span {
+  color: #ff7900;
+}
+
+.products {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px 25px 80px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 25px;
+}
+
+.product {
+  background: #1b1b1b;
+  border-radius: 12px;
+  overflow: hidden;
+  text-align: center;
+  padding-bottom: 20px;
+  transition: 0.2s;
+}
+
+.product:hover {
+  transform: translateY(-5px);
+}
+
+.product img {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  display: block;
+}
+
+.product h3 {
+  padding: 0 15px;
+  font-size: 18px;
+}
+
+.product a {
+  display: inline-block;
+  background: #ff7900;
+  color: #111;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 13px 22px;
+  border-radius: 6px;
+}
+
+.product a:hover {
+  background: white;
+}
+
+footer {
+  text-align: center;
+  padding: 25px;
+  color: #777;
+  border-top: 1px solid #292929;
+}
+</style>
 </head>
+
 <body>
 
-  <header>
-    <a class="logo" href="#">WOW<span>FINDS</span></a>
-  </header>
+<header>
+  <a class="logo" href="#">WOW<span>FINDS</span></a>
+</header>
 
-  <section class="hero">
-    <p>DISCOVER SOMETHING AMAZING</p>
-    <h1>Find your next<br><span>favourite thing.</span></h1>
-    <p>Interesting products. Amazing discoveries.</p>
-    <a class="button" href="#shop">Explore products →</a>
-  </section>
+<section class="hero">
+  <p>DISCOVER SOMETHING AMAZING</p>
+  <h1>Find your next<br><span>favourite thing.</span></h1>
+  <p>Interesting products. Amazing discoveries.</p>
+</section>
 
-  <section id="shop">
-    <h2>Popular finds</h2>
-    <div id="products" class="products">
-      <p>Loading products...</p>
-    </div>
-  </section>
+<section class="products" id="products"></section>
 
-  <footer>
-    <p>WOW FINDS © 2026</p>
-    <p>Some links may be affiliate links.</p>
-  </footer>
+<footer>
+  WOW FINDS © 2026
+  <p>Some links may be affiliate links.</p>
+</footer>
 
-  <script src="script.js"></script>
+<script>
+
+// ==================================
+// ДОДАВАЙ СВОЇ ТОВАРИ ТУТ
+// ==================================
+
+const products = [
+
+  {
+    name: "Amazing Gadget",
+    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600",
+    link: "https://amazon.com/"
+  },
+
+  {
+    name: "Smart Watch",
+    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600",
+    link: "https://amazon.com/"
+  },
+
+  {
+    name: "Modern Headphones",
+    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600",
+    link: "https://amazon.com/"
+  }
+
+];
+
+// ==================================
+// НЕ ПОТРІБНО ЗМІНЮВАТИ КОД НИЖЧЕ
+// ==================================
+
+const container = document.getElementById("products");
+
+products.forEach(product => {
+  const card = document.createElement("article");
+  card.className = "product";
+
+  const image = document.createElement("img");
+  image.src = product.image;
+  image.alt = product.name;
+  image.loading = "lazy";
+
+  const title = document.createElement("h3");
+  title.textContent = product.name;
+
+  const link = document.createElement("a");
+  link.href = product.link;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "DISCOVER PRODUCT ↗";
+
+  card.append(image, title, link);
+  container.appendChild(card);
+});
+
+</script>
+
 </body>
 </html>
